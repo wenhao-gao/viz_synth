@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synthesis Path Visualization</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            padding: 2rem;
+        }
+        h1 {
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .input-section {
+            background: #fff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            font-family: "Fira Code", "Consolas", monospace;
+            font-size: 0.85rem;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            tab-size: 2;
+        }
+        textarea:focus { outline: none; border-color: #4a90d9; }
+        .options {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 1rem;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+        .option-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .option-group label { font-size: 0.8rem; color: #666; }
+        select, input[type="number"] {
+            padding: 0.4rem 0.6rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+        input[type="number"] { width: 80px; }
+        button {
+            padding: 0.5rem 1.5rem;
+            background: #4a90d9;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        button:hover { background: #3a7bc8; }
+        button:disabled { background: #999; cursor: not-allowed; }
+        .output-section {
+            background: #fff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            min-height: 200px;
+            text-align: center;
+        }
+        .output-section img {
+            max-width: 100%;
+            height: auto;
+        }
+        .placeholder {
+            color: #999;
+            padding: 3rem;
+            font-size: 0.9rem;
+        }
+        .error {
+            color: #d9534f;
+            padding: 1rem;
+            background: #fdf2f2;
+            border-radius: 4px;
+        }
+        .spinner {
+            display: none;
+            margin: 2rem auto;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #eee;
+            border-top-color: #4a90d9;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Synthesis Path Visualization</h1>
+
+        <div class="input-section">
+            <label for="synthesis-text">Synthesis Text</label>
+            <textarea id="synthesis-text" placeholder="- Reaction Index: 103
+  Possible Products:
+    - COc1ccc(-c2ccnc(Nc3ccccc3)n2)cc1
+  Reactants:
+    - SMILES: COc1ccc(-c2ccnc(Cl)n2)cc1
+      Building Block Index: 198209
+      ID: EN300-249263
+    - SMILES: Nc1ccccc1
+      Building Block Index: 95219
+      ID: EN300-29997"></textarea>
+
+            <div class="options">
+                <div class="option-group">
+                    <label for="rankdir">Direction</label>
+                    <select id="rankdir">
+                        <option value="LR">Left to Right</option>
+                        <option value="TB">Top to Bottom</option>
+                        <option value="RL">Right to Left</option>
+                        <option value="BT">Bottom to Top</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label for="node-size">Image Size</label>
+                    <input type="number" id="node-size" value="200" min="50" max="500" step="50">
+                </div>
+                <div class="option-group">
+                    <label for="dpi">DPI</label>
+                    <input type="number" id="dpi" value="200" min="72" max="600" step="50">
+                </div>
+                <button id="visualize-btn" onclick="visualize()">Visualize</button>
+            </div>
+        </div>
+
+        <div class="output-section" id="output">
+            <div class="placeholder">Paste synthesis text above and click Visualize</div>
+        </div>
+    </div>
+
+    <script>
+        async function visualize() {
+            const text = document.getElementById("synthesis-text").value.trim();
+            if (!text) return;
+
+            const btn = document.getElementById("visualize-btn");
+            const output = document.getElementById("output");
+
+            btn.disabled = true;
+            btn.textContent = "Rendering...";
+            output.innerHTML = '<div class="spinner" style="display:block"></div>';
+
+            try {
+                const resp = await fetch("/visualize", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        text: text,
+                        rankdir: document.getElementById("rankdir").value,
+                        node_image_size: parseInt(document.getElementById("node-size").value),
+                        dpi: parseInt(document.getElementById("dpi").value),
+                    }),
+                });
+
+                if (!resp.ok) {
+                    const errText = await resp.text();
+                    output.innerHTML = `<div class="error">Error: ${resp.status} ${errText || resp.statusText}</div>`;
+                    return;
+                }
+
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                output.innerHTML = `<img src="${url}" alt="Synthesis graph">`;
+            } catch (err) {
+                output.innerHTML = `<div class="error">Request failed: ${err.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Visualize";
+            }
+        }
+
+        // Allow Ctrl+Enter to submit
+        document.getElementById("synthesis-text").addEventListener("keydown", (e) => {
+            if (e.ctrlKey && e.key === "Enter") visualize();
+        });
+    </script>
+</body>
+</html>
